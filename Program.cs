@@ -7,11 +7,11 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Runtime.Serialization;
 using System.Reflection;
 
-namespace Processor
+namespace UCL.COMPGV07
 {
     class Program
     {
-        /* These types have the exact same members as the Unity project, though they also have helpful member functions not required in Unity */
+        /* These types have the exact same member variables as the Unity project. They also have helpful member functions not required in Unity. */
 
 #pragma warning disable 0649    // disable 'is never assigned to' warning because the following members are only meant to be populated from the file
 
@@ -29,7 +29,7 @@ namespace Processor
             public int groupNumber;
             public DateTime session;
             public float startTime;
-            public int[] itemsToCollect;        //convenience copy so we don't have to import this explicitly
+            public int[] itemsToCollect;        //convenience copy so we don't have to import the experiment configuration as well
             public List<Purchase> itemsCollected;
             public List<Frame> frames = new List<Frame>();
         }
@@ -107,9 +107,6 @@ namespace Processor
             }
         }
 
-        /* All the work will be done in this class, rather than main(). This is so we can either run this program, or load the assembly into matlab and use its
-        interop functionality to create an instance of this class and call its methods directly. */
-
         public struct Report
         {
             /*
@@ -144,6 +141,8 @@ namespace Processor
             public float virtualDistanceTravelled;
         }
 
+        /* This is the class that does all the processing for the logs. This way we can either run this program, or load the assembly into matlab and use its
+        interop functionality to create an instance of this class & call its methods directly. */
         public class Metrics
         {
             private List<Trial> trials = new List<Trial>();
@@ -154,7 +153,7 @@ namespace Processor
             public void Import(string path)
             {
                 DirectoryInfo di = new DirectoryInfo(path);
-                foreach (var v in di.GetFiles())
+                foreach (var v in di.GetFiles("*.bin", SearchOption.AllDirectories)) //recursive search
                 {
                     try
                     {
@@ -164,7 +163,7 @@ namespace Processor
                     }
                     catch (Exception)
                     {
-                        //ignore any files that cannot be imported. there may be notes, temporary files or failed experiments.
+                        //ignore any files that cannot be imported. there may be other files with a .bin extension lying around
                     }
                 }
 
@@ -189,7 +188,7 @@ namespace Processor
                     }
 
                     // Get all the item codes from the checkout events and remove all the expected items leaving only the erroneous ones.
-                    report.errorRate = trial.itemsCollected.Select(x => x.Code).Except(trial.itemsToCollect).Count();
+                    report.errorRate = trial.itemsCollected.Where(x => !trial.itemsToCollect.Contains(x.Code)).Count();
 
                     // The sum of all the 'input events'
                     report.inputEvents = trial.frames.Sum(x => x.inputCount);
@@ -209,17 +208,17 @@ namespace Processor
 
             public void PrintResultsTable()
             {
-                Console.WriteLine("Trial   Time      Error     Inputs    RealDistance VirtualDistance");
+                Console.WriteLine("Group  Trial   Time      Error     Inputs    RealDistance VirtualDistance");
                 foreach(var report in reports)
                 {
-                    Console.WriteLine("{0,-7} {1,-9} {2,-9} {3,-9} {4,-12} {5,-16}", report.participantNumber, report.completionTime, report.errorRate, report.inputEvents, report.realDistanceTravelled, report.virtualDistanceTravelled);
+                    Console.WriteLine("{0,-6} {1,-7} {2,-9} {3,-9} {4,-9} {5,-12} {6,-16}", report.groupNumber, report.participantNumber, report.completionTime, report.errorRate, report.inputEvents, report.realDistanceTravelled, report.virtualDistanceTravelled);
                 }
             }
         }
 
         static void Main(string[] args)
         {
-            string path = @"C:\ve2017\";
+            string path = @"C:\COMPGV07_Experiment\";
 
             Metrics m = new Metrics();
             m.Import(path);
