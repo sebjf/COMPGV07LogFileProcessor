@@ -114,21 +114,27 @@ namespace UCL.COMPGV07
             /*
             #1 Completion Time
             * The time from the user first entering the environment(Start() called on data collection script) to the last item registering on the conveyer belt.
+           
+            #2 Total Time
+            * The time from the user first entering the environment(Start() called on data collection script) to the last frame captured before the experiment was terminated.
 
-            #2 Error Rate
+            #3 Error Rate
             * The total number of redundant or otherwise incorrect items placed on the conveyer belt
+            
+            #4 Success Rate
+            * The total number of correct items placed on the conveyer belt
 
-            #3 Inputs/Expended Energy
+            #5 Inputs/Expended Energy
             * The amount of time the user spends providing input to the system.
             * This includes button presses, joystick actuation, gesturing (estimated as the typical time to complete a gesture), or moving the feet if walking in place.
             * Button presses will measure how long the button is held down for.
             * This will be measured to begin with using simply the unity Input.GetKeyXXXX() methods, but will be extended depending on the design of the interaction techniques.
 
-            #4 Distance Travelled (real)
+            #6 Distance Travelled (real)
             * The total distance covered by the head throughout the trial
             * Computed by finding the difference in positions between two frames and accumulating it
 
-            #5 Distance Travelled (virtual)
+            #7 Distance Travelled (virtual)
             * The total distance covered by the virtual viewpoint throughout the trial.
             * Computed by finding the difference in positions between two frames and accumulating it
             */
@@ -137,7 +143,9 @@ namespace UCL.COMPGV07
             public int groupNumber;
             public bool completed;
             public float completionTime;
+            public float totalTime;
             public int errorRate;
+            public int successRate;
             public int inputEvents;
             public float realDistanceTravelled;
             public float virtualDistanceTravelled;
@@ -154,6 +162,7 @@ namespace UCL.COMPGV07
 
             public void Import(string path)
             {
+                int j = 0;
                 DirectoryInfo di = new DirectoryInfo(path);
                 foreach (var v in di.GetFiles("*.bin", SearchOption.AllDirectories)) //recursive search
                 {
@@ -162,6 +171,7 @@ namespace UCL.COMPGV07
                         BinaryFormatter formatter = new BinaryFormatter();
                         formatter.Binder = new TypeConverter();
                         trials.Add(formatter.Deserialize(new FileStream(v.FullName, FileMode.Open, FileAccess.Read)) as Trial);
+                        Console.Write("Processed {0} files.\r", j++);
                     }
                     catch (Exception e)
                     {
@@ -180,6 +190,8 @@ namespace UCL.COMPGV07
                     // Get the codes of all items collected, and subtract them from the items to collect list. If the participant was successful, there should be none remaining.
                     report.completed = trial.itemsToCollect.Except(trial.itemsCollected.Select(x => x.Code)).Count() == 0;
 
+                    report.successRate = trial.itemsCollected.Where(x => trial.itemsToCollect.Contains(x.Code)).Count();
+
                     // Get all 'checkout events' that include pertinent items, and get the last of them.
                     if (report.completed)
                     {
@@ -189,6 +201,8 @@ namespace UCL.COMPGV07
                     {
                         report.completionTime = incompleteTime;
                     }
+
+                    report.totalTime = trial.frames.Last().time - trial.startTime;
 
                     // Get all the item codes from the checkout events and remove all the expected items leaving only the erroneous ones.
                     report.errorRate = trial.itemsCollected.Where(x => !trial.itemsToCollect.Contains(x.Code)).Count();
@@ -211,29 +225,42 @@ namespace UCL.COMPGV07
 
             public void PrintResultsTable()
             {
-                Console.WriteLine("Group  Trial   Time      Error     Inputs    RealDistance VirtualDistance");
+                Console.WriteLine("Group  Trial   CompleteTime  TotalTime      Error    Success   Inputs    RealDistance VirtualDistance");
                 foreach(var report in reports)
                 {
-                    Console.WriteLine("{0,-6} {1,-7} {2,-9} {3,-9} {4,-9} {5,-12} {6,-16}", report.groupNumber, report.participantNumber, report.completionTime, report.errorRate, report.inputEvents, report.realDistanceTravelled, report.virtualDistanceTravelled);
+                    Console.WriteLine("{0,-6} {1,-7} {2,-13} {3,-14} {4,-8} {5,-9} {6,-9} {7,-12} {8,-16}", report.groupNumber, report.participantNumber, report.completionTime, report.totalTime, report.errorRate, report.successRate, report.inputEvents, report.realDistanceTravelled, report.virtualDistanceTravelled);
                 }
             }
 
             public float[,] GetResultsTable()
             {
-                var table = new float[reports.Count, 8];
+                var table = new float[reports.Count, 9];
                 for (int i = 0; i < reports.Count; i++)
                 {
                     var report = reports[i];
                     table[i, 0] = report.groupNumber;
                     table[i, 1] = report.participantNumber;
                     table[i, 2] = report.completionTime;
-                    table[i, 3] = report.errorRate;
-                    table[i, 4] = report.inputEvents;
+                    table[i, 3] = report.totalTime;
+                    table[i, 4] = report.errorRate;
+                    table[i, 5] = report.inputEvents;
                     table[i, 6] = report.realDistanceTravelled;
                     table[i, 7] = report.virtualDistanceTravelled;
                 }
 
                 return table;
+            }
+
+            public void SaveResultsTable(string filename)
+            {
+                using (StreamWriter writer = new StreamWriter(filename))
+                {
+                    writer.WriteLine("Group,  Trial,   CompleteTime,  TotalTime,      Error,    Success,   Inputs,    RealDistance, VirtualDistance");
+                    foreach (var report in reports)
+                    {
+                        writer.WriteLine("{0,-6}, {1,-7}, {2,-13}, {3,-14}, {4,-8}, {5,-9}, {6,-9}, {7,-12}, {8,-16}", report.groupNumber, report.participantNumber, report.completionTime, report.totalTime, report.errorRate, report.successRate, report.inputEvents, report.realDistanceTravelled, report.virtualDistanceTravelled);
+                    }
+                }
             }
         }
 
@@ -248,8 +275,17 @@ namespace UCL.COMPGV07
 
             Metrics m = new Metrics();
             m.Import(path);
-            m.PrintResultsTable();
-            Console.ReadLine();
+
+            if(args.Length > 1)
+            {
+                m.SaveResultsTable(args[1]);
+            }
+            else
+            {
+                m.PrintResultsTable();
+                Console.ReadLine();
+            }
+
         }
     }
 }
