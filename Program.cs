@@ -90,9 +90,11 @@ namespace UCL.COMPGV07
                     case "UCL.COMPGV07.Logging+PortableVector":
                         return typeof(PortableVector);
 
+                    case "System.Collections.Generic.List`1[[UCL.COMPGV07.Purchase, Assembly-CSharp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]":
                     case "System.Collections.Generic.List`1[[UCL.COMPGV07.Purchase, Assembly-CSharp, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]]":
                         return typeof(List<Purchase>);
 
+                    case "System.Collections.Generic.List`1[[UCL.COMPGV07.Logging+Frame, Assembly-CSharp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]":
                     case "System.Collections.Generic.List`1[[UCL.COMPGV07.Logging+Frame, Assembly-CSharp, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]]":
                         return typeof(List<Frame>);
 
@@ -148,7 +150,7 @@ namespace UCL.COMPGV07
             private List<Trial> trials = new List<Trial>();
             private List<Report> reports = new List<Report>();
 
-            private const float maxTime = 15 * 60;
+            private const float incompleteTime = -1;
 
             public void Import(string path)
             {
@@ -161,9 +163,10 @@ namespace UCL.COMPGV07
                         formatter.Binder = new TypeConverter();
                         trials.Add(formatter.Deserialize(new FileStream(v.FullName, FileMode.Open, FileAccess.Read)) as Trial);
                     }
-                    catch (Exception)
+                    catch (Exception e)
                     {
                         //ignore any files that cannot be imported. there may be other files with a .bin extension lying around
+                        Console.WriteLine("Exception " + e.ToString());
                     }
                 }
 
@@ -184,7 +187,7 @@ namespace UCL.COMPGV07
                     }
                     else
                     {
-                        report.completionTime = maxTime;
+                        report.completionTime = incompleteTime;
                     }
 
                     // Get all the item codes from the checkout events and remove all the expected items leaving only the erroneous ones.
@@ -214,11 +217,34 @@ namespace UCL.COMPGV07
                     Console.WriteLine("{0,-6} {1,-7} {2,-9} {3,-9} {4,-9} {5,-12} {6,-16}", report.groupNumber, report.participantNumber, report.completionTime, report.errorRate, report.inputEvents, report.realDistanceTravelled, report.virtualDistanceTravelled);
                 }
             }
+
+            public float[,] GetResultsTable()
+            {
+                var table = new float[reports.Count, 8];
+                for (int i = 0; i < reports.Count; i++)
+                {
+                    var report = reports[i];
+                    table[i, 0] = report.groupNumber;
+                    table[i, 1] = report.participantNumber;
+                    table[i, 2] = report.completionTime;
+                    table[i, 3] = report.errorRate;
+                    table[i, 4] = report.inputEvents;
+                    table[i, 6] = report.realDistanceTravelled;
+                    table[i, 7] = report.virtualDistanceTravelled;
+                }
+
+                return table;
+            }
         }
 
         static void Main(string[] args)
         {
             string path = @"C:\COMPGV07_Experiment\";
+
+            if (args.Length > 0)
+            {
+                path = args[0];
+            }
 
             Metrics m = new Metrics();
             m.Import(path);
